@@ -39,7 +39,6 @@ fps:
   disable_collision_detection_positioners: []
   open_loop_positioners: []
   use_sync_line: false
-  use_lock: True
 
 positioner:
   reduction_ratio: 1024

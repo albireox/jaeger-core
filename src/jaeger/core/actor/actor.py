@@ -67,7 +67,7 @@ class JaegerActor(clu.LegacyActor):
         # one, merge them.
         base = os.path.join(os.path.dirname(__file__), "..")
 
-        base_schema = os.path.realpath(os.path.join(base, "etc/schema.json"))
+        base_schema = os.path.realpath(os.path.join(base, "config/schema.json"))
 
         schema = kwargs.get("schema", None)
         c_schema = os.path.realpath(os.path.join(base, schema)) if schema else None

@@ -14,12 +14,10 @@ import os
 import pathlib
 import time
 import warnings
-from glob import glob
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 import numpy
-from astropy.time import Time
 from sdsstools import read_yaml_file
 
 from jaeger.core import config, log
@@ -62,7 +60,7 @@ async def send_trajectory(
     send_trajectory: bool = True,
     start_trajectory: bool = True,
     command: Optional[CluCommand[JaegerActor]] = None,
-    dump: bool | str = True,
+    dump: bool | str = False,
     extra_dump_data: dict[str, Any] = {},
 ) -> Trajectory:
     """Sends a set of trajectories to the positioners.
@@ -314,17 +312,7 @@ class Trajectory(object):
         elif isinstance(dump, (str, pathlib.Path)):
             self.dump_file = str(dump)
         else:
-            dirname = config["positioner"]["trajectory_dump_path"]
-            mjd = str(int(Time.now().mjd))
-            dirname = os.path.join(dirname, mjd)
-
-            files = list(sorted(glob(os.path.join(dirname, "*.json"))))
-            if len(files) == 0:
-                seq = 1
-            else:
-                seq = int(files[-1].split("-")[-1].split(".")[0]) + 1
-
-            self.dump_file = os.path.join(dirname, f"trajectory-{mjd}-{seq:04d}.json")
+            raise ValueError("dump must be a string or False.")
 
     def validate(self):
         """Validates the trajectory."""

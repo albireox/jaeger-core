@@ -155,7 +155,7 @@ class Positioner(StatusMixIn):
     async def send_command(self, command, error: Optional[str] = None, **kwargs):
         """Sends and awaits a command to the FPS for this positioner."""
 
-        if not self.fps:
+        if self.fps is None:
             raise PositionerError("FPS is not set.")
 
         command = await self.fps.send_command(

@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import warnings
 from dataclasses import dataclass
 
@@ -25,7 +24,6 @@ from typing import (
 
 import numpy
 from typing_extensions import Self
-from zc.lockfile import LockFile
 
 import jaeger.core
 from jaeger.core import can_log, config, log, start_file_loggers
@@ -211,8 +209,6 @@ class FPS(BaseFPS):
         # The mapping between positioners and buses.
         self.positioner_to_bus: Dict[int, Tuple[BusABC, int | None]] = {}
 
-        self.pid_lock: LockFile | None = None
-
         self._locked = False
         self.locked_by: List[int] = []
 
@@ -285,20 +281,6 @@ class FPS(BaseFPS):
     async def start_can(self):
         """Starts the JaegerCAN interface."""
 
-        use_lock = config["fps"]["use_lock"]
-
-        if use_lock and self.pid_lock is None:
-            try:
-                if not os.path.exists(os.path.dirname(LOCK_FILE)):
-                    os.makedirs(os.path.dirname(LOCK_FILE))
-                self.pid_lock = LockFile(LOCK_FILE)
-            except Exception:
-                raise JaegerError(
-                    f"Failed creating lock file {LOCK_FILE}. "
-                    "Probably another instance is running. "
-                    "If that is not the case, remove the lock file and retry."
-                )
-
         if isinstance(self.can, JaegerCAN):
             await self.can.start()
             return
@@ -331,7 +313,6 @@ class FPS(BaseFPS):
         start_pollers: bool | None = None,
         check_low_temperature: bool | None = None,
         keep_disabled: bool = True,
-        skip_assignments_check: bool | None = None,
     ) -> Self:
         """Initialises all positioners with status and firmware version.
 
@@ -343,15 +324,10 @@ class FPS(BaseFPS):
             Enables the low temperature warnings.
         keep_disabled
             Maintain the list of disabled/offline robots.
-        skip_assignments_check
-            Do not check fibre assignments.
 
         """
 
         fps_config = config["fps"]
-
-        if skip_assignments_check is None:
-            skip_assignments_check = fps_config.get("skip_assignments_check", False)
 
         if check_low_temperature is None:
             check_low_temperature = fps_config.get("check_low_temperature", True)

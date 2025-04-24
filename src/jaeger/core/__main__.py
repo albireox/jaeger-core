@@ -184,6 +184,9 @@ def jaeger(
     if no_lock:
         config["fps"]["use_lock"] = False
 
+    if profile is None:
+        profile = config["profiles.default"]
+
     actor_config = config.get("actor", {})
 
     if verbose == 1:
@@ -242,7 +245,7 @@ async def actor(fps_maker):
     async with fps_maker as fps:
         actor_: JaegerActor = JaegerActor.from_config(config_copy, fps)
 
-        await fps.initialise(skip_assignments_check=fps_maker.skip_assignments_check)
+        await fps.initialise()
 
         await actor_.start()
         await actor_.run_forever()
@@ -432,17 +435,6 @@ async def calibrate(fps_maker, positioner_id, motors, datums, cogging):
     default=False,
     help="Forces a move to happen.",
 )
-@click.option(
-    "--go-cowboy",
-    is_flag=True,
-    help="If set, does not use kaiju-validated trajectories.",
-)
-@click.option(
-    "--use-sync/-no-use-sync",
-    " /-S",
-    default=True,
-    help="Whether to use the SYNC line to start the trajectory.",
-)
 @pass_fps
 @cli_coro
 async def goto(
@@ -454,12 +446,10 @@ async def goto(
     all: bool = False,
     force: bool = False,
     relative: bool = False,
-    use_sync: bool = True,
-    go_cowboy: bool = False,
 ):
     """Sends positioners to a given (alpha, beta) position."""
 
-    with fps_maker as fps:
+    async with fps_maker as fps:
         if all:
             if not force:
                 raise JaegerError("Use --force to move all positioners at once.")
@@ -481,7 +471,6 @@ async def goto(
                 new_positions,
                 speed=speed,
                 relative=relative,
-                use_sync_line=use_sync,
             )
         except (JaegerError, TrajectoryError) as err:
             raise JaegerError(f"Goto command failed: {err}")
@@ -557,8 +546,6 @@ async def list_positioners(fps_maker: FPSWrapper):
 async def status(fps_maker: FPSWrapper, positioner_id: int):
     """Returns the status of a positioner with low-level initialisation."""
 
-    fps_maker.initialise = False
-
     async with fps_maker as fps:
         if isinstance(fps, VirtualFPS):
             raise JaegerError("Cannot get status of virtual positioner.")
@@ -581,7 +568,7 @@ async def status(fps_maker: FPSWrapper, positioner_id: int):
 
         try:
             await pos.update_position()
-            print(f"Position: {pos.position}")
+            print(f"Position: alpha={pos.position[0]:.3f}, beta={pos.position[1]:.3f}")
         except Exception as err:
             raise JaegerError(f"Failed retrieving position: {err}")
 

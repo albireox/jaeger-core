@@ -314,7 +314,7 @@ wheels = [
 
 [[package]]
 name = "jaeger-core"
-version = "0.1.0a0"
+version = "1.0.0a0"
 source = { editable = "." }
 dependencies = [
     { name = "astropy" },
@@ -323,7 +323,6 @@ dependencies = [
     { name = "numpy" },
     { name = "progressbar" },
     { name = "sdss-clu" },
-    { name = "zc-lockfile" },
 ]
 
 [package.dev-dependencies]
@@ -348,7 +347,6 @@ requires-dist = [
     { name = "numpy", marker = "python_full_version >= '3.11'", specifier = ">=2.0,<3" },
     { name = "progressbar", specifier = ">=2.5" },
     { name = "sdss-clu", specifier = ">=2.0.0" },
-    { name = "zc-lockfile", specifier = ">=3.0.post1" },
 ]
 
 [package.metadata.requires-dev]
@@ -1124,15 +1122,6 @@ wheels = [
 ]
 
 [[package]]
-name = "setuptools"
-version = "79.0.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bb/71/b6365e6325b3290e14957b2c3a804a529968c77a049b2ed40c095f749707/setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88", size = 1367909, upload_time = "2025-04-23T22:20:59.241Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/6d/b4752b044bf94cb802d88a888dc7d288baaf77d7910b7dedda74b5ceea0c/setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51", size = 1256281, upload_time = "2025-04-23T22:20:56.768Z" },
-]
-
-[[package]]
 name = "stack-data"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1326,16 +1315,4 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ed/f7/f0f2500cf0c469beb2050b522c7815c575811627e6d3eb9ec7550ddd0bfe/yarl-1.20.0-cp313-cp313t-win32.whl", hash = "sha256:65a4053580fe88a63e8e4056b427224cd01edfb5f951498bfefca4052f0ce0ac", size = 93816, upload_time = "2025-04-17T00:44:25.491Z" },
     { url = "https://files.pythonhosted.org/packages/3f/93/f73b61353b2a699d489e782c3f5998b59f974ec3156a2050a52dfd7e8946/yarl-1.20.0-cp313-cp313t-win_amd64.whl", hash = "sha256:53b2da3a6ca0a541c1ae799c349788d480e5144cac47dba0266c7cb6c76151fe", size = 101093, upload_time = "2025-04-17T00:44:27.418Z" },
     { url = "https://files.pythonhosted.org/packages/ea/1f/70c57b3d7278e94ed22d85e09685d3f0a38ebdd8c5c73b65ba4c0d0fe002/yarl-1.20.0-py3-none-any.whl", hash = "sha256:5d0fe6af927a47a230f31e6004621fd0959eaa915fc62acfafa67ff7229a3124", size = 46124, upload_time = "2025-04-17T00:45:12.199Z" },
-]
-
-[[package]]
-name = "zc-lockfile"
-version = "3.0.post1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/83/a5432aa08312fc834ea594473385c005525e6a80d768a2ad246e78877afd/zc.lockfile-3.0.post1.tar.gz", hash = "sha256:adb2ee6d9e6a2333c91178dcb2c9b96a5744c78edb7712dc784a7d75648e81ec", size = 10190, upload_time = "2023-02-28T07:30:13.994Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/aa/47f00f32605177a945f3a1b36a1b2bb9a39260566541280fcee27cbff5cf/zc.lockfile-3.0.post1-py3-none-any.whl", hash = "sha256:ddb2d71088c061dc8a5edbaa346b637d742ca1e1564be75cb98e7dcae715de19", size = 9770, upload_time = "2023-02-28T07:30:12.145Z" },
 ]

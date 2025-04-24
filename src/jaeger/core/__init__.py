@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from .actor import JaegerActor
 
 
-NAME = "jaeger"
+NAME = "jaeger-core"
 
 __version__ = get_package_version(path=__file__, package_name=NAME)
 

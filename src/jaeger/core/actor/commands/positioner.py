@@ -102,17 +102,6 @@ def check_positioners(positioner_ids, command, fps, initialised=False):
     default=False,
     help="Forces a move to happen.",
 )
-@click.option(
-    "--use-sync/-no-use-sync",
-    " /-S",
-    default=None,
-    help="Whether to use the SYNC line to start the trajectory.",
-)
-@click.option(
-    "--go-cowboy",
-    is_flag=True,
-    help="If set, does not use kaiju-validated trajectories.",
-)
 async def goto(
     command: Command[JaegerActor],
     fps: FPS,
@@ -124,8 +113,6 @@ async def goto(
     all: bool = False,
     force: bool = False,
     relative: bool = False,
-    use_sync: bool = True,
-    go_cowboy: bool = False,
 ):
     """Sends positioners to a given (alpha, beta) position."""
 
@@ -143,25 +130,16 @@ async def goto(
     if from_file is not None:
         trajectory = json.loads(open(from_file, "r").read())["trajectory"]
 
-        if go_cowboy is True:
-            try:
-                await send_trajectory(
-                    fps,
-                    trajectory,
-                    use_sync_line=use_sync,
-                    command=command,
-                    extra_dump_data={"kaiju_trajectory": False},
-                )
-                return command.finish()
-            except (JaegerError, TrajectoryError) as err:
-                return command.fail(error=f"Goto command failed: {err}")
-
-        else:
-            new_positions = {}
-            for positioner_id in trajectory:
-                alpha = trajectory[positioner_id]["alpha"][-1][0]
-                beta = trajectory[positioner_id]["beta"][-1][0]
-                new_positions[int(positioner_id)] = (alpha, beta)
+        try:
+            await send_trajectory(
+                fps,
+                trajectory,
+                command=command,
+                extra_dump_data={"kaiju_trajectory": False},
+            )
+            return command.finish()
+        except (JaegerError, TrajectoryError) as err:
+            return command.fail(error=f"Goto command failed: {err}")
 
     else:
         assert alpha is not None and beta is not None
@@ -190,9 +168,7 @@ async def goto(
             new_positions,
             speed=speed,
             relative=relative,
-            use_sync_line=use_sync,
             command=command,
-            go_cowboy=go_cowboy,
         )
     except (JaegerError, TrajectoryError) as err:
         return command.fail(error=f"Goto command failed: {err}")
@@ -286,7 +262,6 @@ async def status(
     if len(positioners) == 0:
         command.actor.write("d", {"alive_at": time()}, broadcast=True)
         command.info(locked=fps.locked)
-        command.info(folded=(await fps.is_folded()))
         command.info(n_positioners=len(fps.positioners))
         command.info(fps_status=f"0x{fps.status.value:x}")
 
@@ -329,8 +304,6 @@ async def status(
                     n_trajs_pid,
                 ],
             )
-
-    await clu.Command("ieb status", parent=command).parse()
 
     command.set_status(clu.CommandStatus.DONE)
 

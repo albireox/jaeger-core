@@ -1,6 +1,6 @@
 [project]
 name = "jaeger-core"
-version = "0.1.0a0"
+version = "1.0.0a0"
 description = "Core library to handle MPS fibre positioners"
 readme = "README.md"
 authors = [
@@ -15,7 +15,6 @@ dependencies = [
     "click>=8.0.0",
     "click_default_group>=1.2.2",
     "astropy>=7.0.1",
-    "zc-lockfile>=3.0.post1",
     "progressbar>=2.5",
 ]
 
