@@ -14,8 +14,8 @@ from typing import Tuple
 
 import numpy
 
-from jaeger import config
-from jaeger.maskbits import ResponseCode
+from jaeger.core import config
+from jaeger.core.maskbits import ResponseCode
 
 
 __all__ = [

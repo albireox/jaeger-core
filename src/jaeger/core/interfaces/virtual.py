@@ -12,7 +12,7 @@ import asyncio
 
 from typing import Dict, List
 
-from jaeger.interfaces.bus import BusABC
+from jaeger.core.interfaces.bus import BusABC
 
 from .message import Message
 

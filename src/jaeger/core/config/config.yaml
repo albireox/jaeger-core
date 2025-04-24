@@ -1,0 +1,55 @@
+---
+actor:
+  name: jaeger
+  host: 0.0.0.0
+  port: 19990
+  verbose: 30
+  status:
+    port: 19991
+    delay: 5
+  schema: config/schema.json
+
+profiles:
+  default: cannet
+  cannet:
+    interface: cannet
+    channels:
+      - cannet1
+    port: 19228
+    buses: [1, 2, 3, 4]
+    bitrate: 1000000
+    timeout: 1
+    status_interval: 5
+  slcan:
+    interface: slcan
+    channel: /dev/tty.usbserial-LW3HTDSY
+    ttyBaudrate: 1000000
+    bitrate: 1000000
+  virtual:
+    interface: virtual
+    channel: test1
+
+fps:
+  initialise_timeouts: 0.5
+  start_pollers: false
+  status_poller_delay: 5
+  position_poller_delay: 5
+  disabled_positioners: []
+  offline_positioners: null
+  disable_collision_detection_positioners: []
+  open_loop_positioners: []
+  use_sync_line: false
+  use_lock: True
+
+positioner:
+  reduction_ratio: 1024
+  motor_steps: 1073741824
+  time_step: 0.0005
+  motor_speed: 2000
+  initialise_datums_timeout: 300
+  disable_precise_moves: true
+  uid_bits: 6
+  trajectory_data_n_points: 3
+  firmware_messages_per_positioner: 16
+
+debug: false

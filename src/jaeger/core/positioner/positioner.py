@@ -15,14 +15,14 @@ from typing import List, Optional, Tuple
 
 from packaging.version import Version
 
-import jaeger
-from jaeger import config, log, maskbits
-from jaeger.can import JaegerCAN
-from jaeger.commands import CommandID
-from jaeger.commands.bootloader import GetFirmwareVersion
-from jaeger.commands.status import GetActualPosition
-from jaeger.exceptions import JaegerError, PositionerError
-from jaeger.utils import StatusMixIn, bytes_to_int
+import jaeger.core
+from jaeger.core import config, log, maskbits
+from jaeger.core.exceptions import JaegerError, PositionerError
+from jaeger.core.utils import StatusMixIn, bytes_to_int
+
+from .commands import CommandID
+from .commands.bootloader import GetFirmwareVersion
+from .commands.status import GetActualPosition
 
 
 __all__ = ["Positioner"]
@@ -48,7 +48,7 @@ class Positioner(StatusMixIn):
     def __init__(
         self,
         positioner_id: int,
-        fps: jaeger.FPS | None = None,
+        fps: jaeger.core.FPS | None = None,
         centre: Tuple[Optional[float], Optional[float]] = (None, None),
     ):
         self.fps = fps
@@ -141,7 +141,7 @@ class Positioner(StatusMixIn):
         if self.fps is None:
             raise PositionerError("FPS is not defined.")
 
-        if not isinstance(self.fps.can, JaegerCAN):
+        if self.fps.can is None or isinstance(self.fps.can, str):
             raise PositionerError("CAN bus not found.")
 
         if not self.fps.can.multibus:

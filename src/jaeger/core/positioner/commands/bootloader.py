@@ -20,15 +20,15 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import numpy
 
-from jaeger import can_log, config, log
-from jaeger.commands import Command, CommandID
-from jaeger.exceptions import JaegerError, JaegerUserWarning
-from jaeger.maskbits import BootloaderStatus
-from jaeger.utils import int_to_bytes
+from jaeger.core import can_log, config, log
+from jaeger.core.exceptions import JaegerError, JaegerUserWarning
+from jaeger.core.maskbits import BootloaderStatus
+from jaeger.core.positioner.commands import Command, CommandID
+from jaeger.core.utils import int_to_bytes
 
 
 if TYPE_CHECKING:
-    from jaeger import FPS
+    from jaeger.core import FPS
 
 
 __all__ = [

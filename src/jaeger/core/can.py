@@ -28,12 +28,12 @@ from typing import (
     cast,
 )
 
-import jaeger
+import jaeger.core
 from jaeger.core import can_log, config, log, start_file_loggers
-from jaeger.core.commands import Command, CommandID, EmptyPool
 from jaeger.core.exceptions import JaegerCANError
 from jaeger.core.interfaces import BusABC, CANNetBus, Message, Notifier, VirtualBus
 from jaeger.core.maskbits import CommandStatus
+from jaeger.core.positioner import Command, CommandID, EmptyPool
 from jaeger.core.utils import Poller, parse_identifier
 
 

@@ -6,6 +6,8 @@
 # @Filename: __init__.py
 # @License: BSD 3-clause (http://www.opensource.org/licenses/BSD-3-Clause)
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import enum
@@ -98,8 +100,8 @@ class CommandID(enum.IntEnum, metaclass=TypesEnumMeta):
         raise ValueError("The command does not have an associated class.")
 
 
-from .base import *
-from .base import Command
+from .core import Command, EmptyPool
+
 from .bootloader import *
 from .calibration import *
 from .goto import *

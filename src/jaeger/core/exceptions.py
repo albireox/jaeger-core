@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from jaeger.core.commands.trajectory import Trajectory
+    from jaeger.core.positioner.commands.trajectory import Trajectory
 
 
 class JaegerError(Exception):
@@ -103,26 +103,6 @@ class JaegerMissingDependency(JaegerError):
     pass
 
 
-class TrajectoryError(JaegerError):
-    """A trajectory error."""
-
-    def __init__(self, message=None, trajectory: Trajectory | None = None):
-        if message and isinstance(message, str) and message[-1] == ".":
-            message = message[:-1]
-
-        super().__init__(message)
-
-        self.trajectory = trajectory
-        if self.trajectory:
-            self.trajectory.failed = True
-
-
-class FVCError(JaegerError):
-    """An error handling the FVC or the FVC loop."""
-
-    pass
-
-
 class JaegerWarning(Warning):
     """Base warning for Jaeger."""
 
@@ -145,3 +125,17 @@ class JaegerDeprecationWarning(JaegerUserWarning):
     """A warning for deprecated features."""
 
     pass
+
+
+class TrajectoryError(JaegerError):
+    """A trajectory error."""
+
+    def __init__(self, message=None, trajectory: Trajectory | None = None):
+        if message and isinstance(message, str) and message[-1] == ".":
+            message = message[:-1]
+
+        super().__init__(message)
+
+        self.trajectory = trajectory
+        if self.trajectory:
+            self.trajectory.failed = True

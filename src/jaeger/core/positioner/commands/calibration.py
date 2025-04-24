@@ -15,15 +15,15 @@ from typing import TYPE_CHECKING, Dict, List, Tuple
 
 import numpy
 
-from jaeger import config, log
-from jaeger.commands import Command, CommandID
-from jaeger.exceptions import JaegerError
-from jaeger.maskbits import PositionerStatus as PS
-from jaeger.utils import bytes_to_int, int_to_bytes, motor_steps_to_angle
+from jaeger.core import config, log
+from jaeger.core.exceptions import JaegerError
+from jaeger.core.maskbits import PositionerStatus as PS
+from jaeger.core.positioner.commands import Command, CommandID
+from jaeger.core.utils import bytes_to_int, int_to_bytes, motor_steps_to_angle
 
 
 if TYPE_CHECKING:
-    from jaeger import FPS
+    from jaeger.core import FPS
 
 
 __all__ = [

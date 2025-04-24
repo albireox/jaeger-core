@@ -10,13 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import pathlib
 import warnings
 from dataclasses import dataclass
-from glob import glob
 
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
     Dict,
@@ -24,47 +21,33 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
 )
 
 import numpy
-from astropy.time import Time
 from typing_extensions import Self
 from zc.lockfile import LockFile
 
-import jaeger
-from jaeger import can_log, config, log, start_file_loggers
-from jaeger.can import JaegerCAN
-from jaeger.commands import (
+import jaeger.core
+from jaeger.core import can_log, config, log, start_file_loggers
+from jaeger.core.can import JaegerCAN
+from jaeger.core.exceptions import (
+    FPSLockedError,
+    JaegerError,
+    JaegerUserWarning,
+    PositionerError,
+)
+from jaeger.core.interfaces import BusABC
+from jaeger.core.maskbits import FPSStatus, PositionerStatus
+from jaeger.core.positioner import Positioner
+from jaeger.core.positioner.commands import (
     Command,
     CommandID,
     GetFirmwareVersion,
     goto,
     send_trajectory,
 )
-from jaeger.exceptions import (
-    FPSLockedError,
-    JaegerError,
-    JaegerUserWarning,
-    PositionerError,
-)
-from jaeger.ieb import IEB
-from jaeger.interfaces import BusABC
-from jaeger.maskbits import FPSStatus, PositionerStatus
-from jaeger.positioner import Positioner
-from jaeger.utils import Poller, PollerList
+from jaeger.core.utils import Poller, PollerList
 
-
-if TYPE_CHECKING:
-    from matplotlib.axes import Axes
-
-    from jaeger.target.configuration import BaseConfiguration
-
-
-try:
-    from coordio import calibration
-except ImportError:
-    calibration = None
 
 try:
     IPYTHON = get_ipython()  # type: ignore
@@ -192,11 +175,6 @@ class FPS(BaseFPS):
     can
         A `.JaegerCAN` instance to use to communicate with the CAN network, or the CAN
         profile from the configuration to use, or `None` to use the default one.
-    ieb
-        If `True` or `None`, connects the Instrument Electronics Box PLC controller
-        using the path to the IEB configuration file stored in jaeger's configuration.
-        Can also be an `.IEB` instance, the path to a custom configuration file used
-        to load one, or a dictionary with the configuration itself.
 
     Examples
     --------
@@ -215,7 +193,6 @@ class FPS(BaseFPS):
     """
 
     can: JaegerCAN | str | None = None
-    ieb: Union[bool, IEB, dict, str, pathlib.Path, None] = None
     status: FPSStatus = FPSStatus.IDLE | FPSStatus.TEMPERATURE_NORMAL
 
     def __post_init__(self):
@@ -247,38 +224,7 @@ class FPS(BaseFPS):
             log.warning("IEB cannot run inside IPython.")
             self.ieb = False
 
-        if self.ieb is None or self.ieb is True:
-            self.ieb = config["ieb"]["config"]
-
-        if isinstance(self.ieb, pathlib.Path):
-            self.ieb = str(self.ieb)
-
-        if isinstance(self.ieb, (str, dict)):
-            if isinstance(self.ieb, str):
-                self.ieb = os.path.expanduser(os.path.expandvars(str(self.ieb)))
-                if not os.path.isabs(self.ieb):
-                    self.ieb = os.path.join(os.path.dirname(__file__), self.ieb)
-            try:
-                self.ieb = IEB.from_config(self.ieb)
-            except FileNotFoundError:
-                warnings.warn(
-                    f"IEB configuration file {self.ieb} cannot be loaded.",
-                    JaegerUserWarning,
-                )
-                self.ieb = None
-        elif self.ieb is False:
-            self.ieb = None
-        else:
-            raise ValueError(f"Invalid input value for ieb {self.ieb!r}.")
-
-        assert isinstance(self.ieb, IEB) or self.ieb is None
-
         self.__status_event = asyncio.Event()
-        self.__temperature_task: asyncio.Task | None = None
-
-        self._configuration: BaseConfiguration | None = None
-        self._previous_configurations: list[BaseConfiguration] = []
-        self._preloaded_configuration: BaseConfiguration | None = None
 
         # Position and status pollers
         self.pollers = PollerList(
@@ -380,25 +326,6 @@ class FPS(BaseFPS):
 
         return positioner
 
-    @property
-    def configuration(self):
-        """Returns the configuration."""
-
-        return self._configuration
-
-    @configuration.setter
-    def configuration(self, new: BaseConfiguration | None):
-        """Sets the new configuration."""
-
-        # Store current configuration.
-        if self._configuration is not None:
-            self._previous_configurations.append(self._configuration)
-
-        # Keep only 10 previous configurations.
-        self._previous_configurations = self._previous_configurations[-10:]
-
-        self._configuration = new
-
     async def initialise(
         self: Self,
         start_pollers: bool | None = None,
@@ -452,14 +379,6 @@ class FPS(BaseFPS):
 
         # Make sure CAN buses are connected.
         await self.start_can()
-
-        # Test IEB connection.
-        if isinstance(self.ieb, IEB):
-            try:
-                async with self.ieb:
-                    pass
-            except BaseException as err:
-                warnings.warn(str(err), JaegerUserWarning)
 
         assert isinstance(self.can, JaegerCAN), "CAN connection not established."
 
@@ -670,25 +589,6 @@ class FPS(BaseFPS):
                 positioner_ids=closed_loop_positioners,
             )
 
-        # Check that all the robots match the fibre assignments.
-        if not skip_assignments_check:
-            self._check_fibre_assignments()
-
-        # Start temperature watcher.
-        if self.__temperature_task is not None:
-            self.__temperature_task.cancel()
-        if (
-            isinstance(self.ieb, IEB)
-            and not self.ieb.disabled
-            and check_low_temperature
-        ):
-            self.__temperature_task = asyncio.create_task(self._handle_temperature())
-        else:
-            self.set_status(
-                (self.status & ~FPSStatus.TEMPERATURE_NORMAL)
-                | FPSStatus.TEMPERATURE_UNKNOWN
-            )
-
         # Issue an update status to get the status set.
         await self.update_status()
 
@@ -697,38 +597,6 @@ class FPS(BaseFPS):
             self.pollers.start()
 
         return self
-
-    def _check_fibre_assignments(self):
-        """Checks that all the expected robots are present."""
-
-        if calibration is None:
-            raise JaegerError(
-                "coordio.calibrations failed to import. Cannot check assignments."
-            )
-
-        cal_obs = calibration.fiberAssignments.loc[self.observatory]
-        cal_obs = cal_obs.loc[cal_obs.Device == "Positioner"]
-
-        failed: bool = False
-
-        for pid in list(cal_obs.positionerID):
-            if pid not in self:
-                warnings.warn(
-                    f"Positioner {pid} is in fiberAssigments but not connected.",
-                    JaegerUserWarning,
-                )
-                failed = True
-
-        for pid in self:
-            if pid not in list(cal_obs.positionerID):
-                warnings.warn(
-                    f"Positioner {pid} is connected but not in fiberAssigments.",
-                    JaegerUserWarning,
-                )
-                failed = True
-
-        if failed:
-            raise JaegerError("Some positioners do not match fiberAssignments.csv.")
 
     def set_status(self, status: FPSStatus):
         """Sets the status of the FPS."""
@@ -952,8 +820,8 @@ class FPS(BaseFPS):
             alpha = self.positioners[by[0]].alpha
             beta = self.positioners[by[0]].beta
 
-        if jaeger.actor_instance:
-            jaeger.actor_instance.write(
+        if jaeger.core.actor_instance:
+            jaeger.core.actor_instance.write(
                 "e",
                 {
                     "locked": True,
@@ -971,8 +839,6 @@ class FPS(BaseFPS):
                 highlight = None
 
             log.debug(f"Saving snapshot with highlight {highlight} ({self.locked_by})")
-            filename = await self.save_snapshot(highlight=highlight)
-            warnings.warn(f"Snapshot for locked FPS: {filename}", JaegerUserWarning)
 
     async def unlock(self, force=False):
         """Unlocks the `.FPS` if all collisions have been resolved."""
@@ -1223,20 +1089,6 @@ class FPS(BaseFPS):
 
         return True
 
-    async def is_folded(self):
-        """Returns `True` if the array if folded."""
-
-        alphaL, betaL = config["kaiju"]["lattice_position"]
-
-        await self.update_position()
-        positions_array = self.get_positions(ignore_disabled=True)
-
-        if len(positions_array) == 0:
-            return False
-
-        lattice: Any = numpy.array([alphaL, betaL])
-        return numpy.allclose(positions_array[:, 1:] - lattice, 0, atol=1)
-
     async def stop_trajectory(self, clear_flags=False):
         """Stops all the positioners without clearing collided flags.
 
@@ -1282,7 +1134,6 @@ class FPS(BaseFPS):
         speed: Optional[float] = None,
         relative=False,
         use_sync_line: bool | None = None,
-        go_cowboy: bool = False,
     ):
         """Sends a list of positioners to a given position.
 
@@ -1298,8 +1149,6 @@ class FPS(BaseFPS):
             If `True`, ``alpha`` and ``beta`` are considered relative angles.
         use_sync_line
             Whether to use the SYNC line to start the trajectories.
-        go_cowboy
-            If set, does not create a ``kaiju``-safe trajectory. Use at your own risk.
 
         """
 
@@ -1310,7 +1159,6 @@ class FPS(BaseFPS):
                 relative=relative,
                 speed=speed,
                 use_sync_line=use_sync_line,
-                go_cowboy=go_cowboy,
             )
         except Exception:
             raise
@@ -1377,165 +1225,7 @@ class FPS(BaseFPS):
         except AttributeError:
             pass
 
-        if not isinstance(self.ieb, IEB):
-            status["ieb"] = False
-        else:
-            if self.ieb.disabled:
-                status["ieb"] = False
-            else:
-                status["ieb"] = await self.ieb.get_status()
-
         return status
-
-    async def save_snapshot(
-        self,
-        path: Optional[str | pathlib.Path] = None,
-        collision_buffer: float | None = None,
-        positions: dict | None = None,
-        highlight: int | list | None = None,
-        show_disabled: bool = True,
-        write_to_actor: bool = True,
-    ) -> str | Axes:
-        """Creates a plot with the current arrangement of the FPS array.
-
-        Parameters
-        ----------
-        path
-            The path where to save the plot. Defaults to
-            ``/data/logs/jaeger/snapshots/MJD/fps_snapshot_<SEQ>.pdf``.
-        collision_buffer
-            The collision buffer.
-        positions
-            A dictionary of positioner_id to a mapping of ``"alpha"`` and
-            ``"beta"`` positions (``{124: {"alpha": 223.4, "beta": 98.1}, ...}``).
-            If not provided, the internal FPS positions will be used.
-        highlight
-            A robot ID to highlight.
-        show_disabled
-            If `True`, greys out disabled positioners.
-        write_to_actor
-            If `True`, writes the name of the snapshot to the actor users.
-
-        """
-
-        from jaeger.kaiju import get_snapshot
-
-        if path is not None:
-            path = str(path)
-
-        else:
-            mjd = int(Time.now().mjd)
-            dirpath = os.path.join(config["fps"]["snapshot_path"], str(mjd))
-            if not os.path.exists(dirpath):
-                os.makedirs(dirpath)
-
-            path_pattern = dirpath + "/fps_snapshot_*.pdf"
-            files = sorted(glob(path_pattern))
-
-            if len(files) == 0:
-                seq = 1
-            else:
-                seq = int(files[-1].split("_")[-1][0:4]) + 1
-
-            path = path_pattern.replace("*", f"{mjd}_{seq:04d}")
-
-        result = await get_snapshot(
-            path,
-            positions=positions,
-            collision_buffer=collision_buffer,
-            highlight=highlight,
-            show_disabled=show_disabled,
-        )
-
-        if result is True and write_to_actor is True and jaeger.actor_instance:
-            jaeger.actor_instance.write("i", {"snapshot": path})
-
-        return path
-
-    async def _handle_temperature(self):
-        """Handle positioners in low temperature."""
-
-        if not isinstance(self.ieb, IEB):
-            log.error("Cannot handle low-temperature mode. IEB not present.")
-
-        async def set_rpm(activate):
-            if activate:
-                rpm = config["low_temperature"]["rpm_cold"]
-                log.warning(f"Low temperature mode. Setting RPM={rpm}.")
-            else:
-                rpm = config["low_temperature"]["rpm_normal"]
-                log.warning(f"Disabling low temperature mode. Setting RPM={rpm}.")
-
-            config["positioner"]["motor_speed"] = rpm
-
-        async def set_idle_power(activate):
-            if activate:
-                ht = config["low_temperature"]["holding_torque_very_cold"]
-                log.warning("Very low temperature mode. Setting holding torque.")
-            else:
-                ht = config["low_temperature"]["holding_torque_normal"]
-                log.warning(
-                    "Disabling very low temperature mode. Setting holding torque."
-                )
-            await self.send_command(
-                CommandID.SET_HOLDING_CURRENT,
-                alpha=ht[0],
-                beta=ht[1],
-            )
-
-        sensor = config["low_temperature"]["sensor"]
-        cold = config["low_temperature"]["cold_threshold"]
-        very_cold = config["low_temperature"]["very_cold_threshold"]
-        interval = config["low_temperature"]["interval"]
-
-        while True:
-            try:
-                assert isinstance(self.ieb, IEB) and self.ieb.disabled is False
-                device = self.ieb.get_device(sensor)
-                temp = (await device.read())[0]
-
-                # Get the status without the temperature bits.
-                base_status = self.status & ~FPSStatus.TEMPERATURE_BITS
-
-                if temp <= very_cold:
-                    if self.status & FPSStatus.TEMPERATURE_NORMAL:
-                        await set_rpm(True)
-                        await set_idle_power(True)
-                    elif self.status & FPSStatus.TEMPERATURE_COLD:
-                        await set_idle_power(True)
-                    else:
-                        pass
-                    self.set_status(base_status | FPSStatus.TEMPERATURE_VERY_COLD)
-
-                elif temp <= cold:
-                    if self.status & FPSStatus.TEMPERATURE_NORMAL:
-                        await set_rpm(True)
-                    elif self.status & FPSStatus.TEMPERATURE_COLD:
-                        pass
-                    else:
-                        await set_idle_power(False)
-                    self.set_status(base_status | FPSStatus.TEMPERATURE_COLD)
-
-                else:
-                    if self.status & FPSStatus.TEMPERATURE_NORMAL:
-                        pass
-                    elif self.status & FPSStatus.TEMPERATURE_COLD:
-                        await set_rpm(False)
-                    else:
-                        await set_rpm(False)
-                        await set_idle_power(False)
-                    self.set_status(base_status | FPSStatus.TEMPERATURE_NORMAL)
-
-            except BaseException as err:
-                log.warning(
-                    f"Cannot read device {sensor!r}. "
-                    f"Low-temperature tracking temporarily disabled: {err}",
-                )
-                base_status = self.status & ~FPSStatus.TEMPERATURE_BITS
-                self.set_status(base_status | FPSStatus.TEMPERATURE_UNKNOWN)
-
-            finally:
-                await asyncio.sleep(interval)
 
     async def shutdown(self):
         """Stops pollers and shuts down all remaining tasks."""

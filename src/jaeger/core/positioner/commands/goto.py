@@ -8,27 +8,20 @@
 
 from __future__ import annotations
 
-import warnings
-
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
-import jaeger
-from jaeger import config
-from jaeger.commands import Command, CommandID
-from jaeger.exceptions import (
+from jaeger.core import config
+from jaeger.core.exceptions import (
     FPSLockedError,
     JaegerError,
-    JaegerUserWarning,
-    TrajectoryError,
 )
-from jaeger.kaiju import get_path_pair
-from jaeger.utils import (
+from jaeger.core.positioner.commands import Command, CommandID
+from jaeger.core.utils import (
     bytes_to_int,
     get_goto_move_time,
     int_to_bytes,
     motor_steps_to_angle,
 )
-from jaeger.utils.helpers import run_in_executor
 
 from .trajectory import send_trajectory
 
@@ -36,8 +29,8 @@ from .trajectory import send_trajectory
 if TYPE_CHECKING:
     from clu.command import Command as CluCommand
 
-    from jaeger.actor import JaegerActor
-    from jaeger.fps import FPS
+    from jaeger.core.actor import JaegerActor
+    from jaeger.core.fps import FPS
 
 
 __all__ = [
@@ -53,7 +46,7 @@ __all__ = [
 ]
 
 
-TIME_STEP = jaeger.config["positioner"]["time_step"]
+TIME_STEP = config["positioner"]["time_step"]
 
 
 class GoToDatums(Command):
@@ -238,7 +231,6 @@ async def goto(
     speed: Optional[float] = None,
     relative: bool = False,
     use_sync_line: bool | None = None,
-    go_cowboy: bool = False,
     force: bool = False,
     command: CluCommand[JaegerActor] | None = None,
 ):
@@ -258,8 +250,6 @@ async def goto(
         If `True`, ``alpha`` and ``beta`` are considered relative angles.
     use_sync_line
         Whether to use the SYNC line to start the trajectories.
-    go_cowboy
-        If set, does not create a ``kaiju``-safe trajectory. Use at your own risk.
     force
         If ``go_cowboy=False`` and the trajectory is deadlocked, a `.TrajectoryError`
         will be raised. Use ``force=True`` to apply the trajectory anyway.
@@ -287,92 +277,38 @@ async def goto(
 
     trajectories = {}
 
-    if go_cowboy is True:
-        for pid in positioner_ids:
-            pos = fps[pid]
+    for pid in positioner_ids:
+        pos = fps[pid]
 
-            if pos.alpha is None or pos.beta is None:
-                raise JaegerError(
-                    f"Positioner {pid}: cannot goto with unknown position."
-                )
+        if pos.alpha is None or pos.beta is None:
+            raise JaegerError(f"Positioner {pid}: cannot goto with unknown position.")
 
-            current_alpha = pos.alpha
-            current_beta = pos.beta
+        current_alpha = pos.alpha
+        current_beta = pos.beta
 
-            if relative is True:
-                alpha_end = current_alpha + new_positions[pid][0]
-                beta_end = current_beta + new_positions[pid][1]
-            else:
-                alpha_end = new_positions[pid][0]
-                beta_end = new_positions[pid][1]
-
-            alpha_delta = abs(alpha_end - current_alpha)
-            beta_delta = abs(beta_end - current_beta)
-
-            time_end = [
-                get_goto_move_time(alpha_delta, speed=speed),
-                get_goto_move_time(beta_delta, speed=speed),
-            ]
-
-            trajectories[pid] = {
-                "alpha": [(current_alpha, 0.1), (alpha_end, time_end[0] + 0.1)],
-                "beta": [(current_beta, 0.1), (beta_end, time_end[1] + 0.1)],
-            }
-
-    else:
         if relative is True:
-            raise JaegerError("relative is not implemented for kaiju moves.")
+            alpha_end = current_alpha + new_positions[pid][0]
+            beta_end = current_beta + new_positions[pid][1]
+        else:
+            alpha_end = new_positions[pid][0]
+            beta_end = new_positions[pid][1]
 
-        data = {"collision_buffer": None, "grid": {}}
+        alpha_delta = abs(alpha_end - current_alpha)
+        beta_delta = abs(beta_end - current_beta)
 
-        for pid, (current_alpha, current_beta) in fps.get_positions_dict().items():
-            if current_alpha is None or current_beta is None:
-                raise JaegerError(f"Positioner {pid} does not know its position.")
+        time_end = [
+            get_goto_move_time(alpha_delta, speed=speed),
+            get_goto_move_time(beta_delta, speed=speed),
+        ]
 
-            if pid in new_positions:
-                data["grid"][int(pid)] = (
-                    current_alpha,
-                    current_beta,
-                    new_positions[pid][0],
-                    new_positions[pid][1],
-                    fps[pid].disabled,
-                )
-            else:
-                data["grid"][int(pid)] = (
-                    current_alpha,
-                    current_beta,
-                    current_alpha,
-                    current_beta,
-                    fps[pid].disabled,
-                )
-
-        (to_destination, _, did_fail, deadlocks) = await run_in_executor(
-            get_path_pair,
-            data=data,
-            path_generation_mode="greedy",
-            stop_if_deadlock=force,
-            executor="process",
-            ignore_did_fail=force,
-        )
-
-        if did_fail is True:
-            if force is False:
-                raise TrajectoryError(
-                    "Cannot execute trajectory. Found "
-                    f"{len(deadlocks)} deadlocks ({deadlocks})."
-                )
-            else:
-                warnings.warn(
-                    f"Found {len(deadlocks)} deadlocks but applying trajectory.",
-                    JaegerUserWarning,
-                )
-
-        trajectories = to_destination
+        trajectories[pid] = {
+            "alpha": [(current_alpha, 0.1), (alpha_end, time_end[0] + 0.1)],
+            "beta": [(current_beta, 0.1), (beta_end, time_end[1] + 0.1)],
+        }
 
     return await send_trajectory(
         fps,
         trajectories,
         use_sync_line=use_sync_line,
         command=command,
-        extra_dump_data={"kaiju_trajectory": not go_cowboy},
     )

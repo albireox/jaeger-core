@@ -20,23 +20,20 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 import numpy
 from astropy.time import Time
-
-import drift
 from sdsstools import read_yaml_file
 
-from jaeger import config, log
-from jaeger.commands import Command, CommandID
-from jaeger.exceptions import JaegerUserWarning, TrajectoryError
-from jaeger.ieb import IEB
-from jaeger.maskbits import FPSStatus, ResponseCode
-from jaeger.utils import int_to_bytes
+from jaeger.core import config, log
+from jaeger.core.exceptions import JaegerUserWarning, TrajectoryError
+from jaeger.core.maskbits import FPSStatus, ResponseCode
+from jaeger.core.positioner.commands import Command, CommandID
+from jaeger.core.utils import int_to_bytes
 
 
 if TYPE_CHECKING:
     from clu.command import Command as CluCommand
 
-    from jaeger import FPS
-    from jaeger.actor import JaegerActor
+    from jaeger.core import FPS
+    from jaeger.core.actor import JaegerActor
 
 
 __all__ = [
@@ -140,12 +137,6 @@ async def send_trajectory(
 
     assert isinstance(use_sync_line, bool)
 
-    if use_sync_line:
-        if not isinstance(fps.ieb, IEB) or fps.ieb.disabled:
-            raise TrajectoryError("IEB is not connected. Cannot use SYNC line.", traj)
-        if (await fps.ieb.get_device("sync").read())[0] == "closed":
-            raise TrajectoryError("The SYNC line is on high.", traj)
-
     if send_trajectory is False:
         return traj
 
@@ -200,9 +191,6 @@ async def send_trajectory(
     finally:
         if traj.dump_file and command:
             command.debug(trajectory_dump_file=traj.dump_file)
-
-    if command:
-        command.info(folded=(await fps.is_folded()))
 
     msg = "All positioners have reached their destinations."
     log.info(msg)
@@ -264,7 +252,7 @@ class Trajectory(object):
         self,
         fps: FPS,
         trajectories: str | pathlib.Path | TrajectoryDataType,
-        dump: bool | str = True,
+        dump: bool | str = False,
         extra_dump_data: dict[str, Any] = {},
     ):
         self.fps = fps
@@ -282,7 +270,7 @@ class Trajectory(object):
             raise TrajectoryError("invalid trajectory data.", self)
 
         # List of positioners that failed receiving the trajectory and reason.
-        self.failed_positioners: dict[int, str] = {}
+        self.failed_positioners: dict[int, str | None] = {}
 
         self.validate()
 
@@ -534,40 +522,21 @@ class Trajectory(object):
 
         self.use_sync_line = use_sync_line
 
-        if use_sync_line:
-            if not isinstance(self.fps.ieb, IEB) or self.fps.ieb.disabled:
-                raise TrajectoryError(
-                    "IEB is not connected. Cannot use SYNC line.",
-                    self,
-                )
-            if (await self.fps.ieb.get_device("sync").read())[0] == "closed":
-                raise TrajectoryError("The SYNC line is on high.", self)
+        # Start trajectories
+        n_expected = len([pos for pos in self.fps.values() if not pos.offline])
+        command = await self.fps.send_command(
+            "START_TRAJECTORY",
+            positioner_ids=0,
+            timeout=1,
+            # All positioners reply, including those not in the trajectory but not
+            # offline ones.
+            n_positioners=n_expected,
+        )
 
-            sync = self.fps.ieb.get_device("sync")
-            assert isinstance(sync, drift.Relay)
-
-            # Set SYNC line to high.
-            await sync.close()
-
-            # Schedule reseting of SYNC line
-            asyncio.get_event_loop().call_later(0.5, asyncio.create_task, sync.open())
-
-        else:
-            # Start trajectories
-            n_expected = len([pos for pos in self.fps.values() if not pos.offline])
-            command = await self.fps.send_command(
-                "START_TRAJECTORY",
-                positioner_ids=0,
-                timeout=1,
-                # All positioners reply, including those not in the trajectory but not
-                # offline ones.
-                n_positioners=n_expected,
-            )
-
-            if command.status.failed:
-                await self.fps.stop_trajectory()
-                self.failed = True
-                raise TrajectoryError("START_TRAJECTORY failed", self)
+        if command.status.failed:
+            await self.fps.stop_trajectory()
+            self.failed = True
+            raise TrajectoryError("START_TRAJECTORY failed", self)
 
         restart_pollers = True if self.fps.pollers.running else False
         await self.fps.pollers.stop()
@@ -631,10 +600,6 @@ class Trajectory(object):
             raise
 
         finally:
-            # Not explicitely updating the positions here because save_snapshot()
-            # will do that and no need to waste extra time. Do not wait for this.
-            asyncio.create_task(self.fps.save_snapshot())
-
             if self.dump_file:
                 self.dump_trajectory()
 

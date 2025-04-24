@@ -9,21 +9,17 @@
 import asyncio
 import zlib
 
-from typing import Mapping, Optional, Tuple
-
-import numpy
+from typing import Optional, Tuple
 
 import jaeger.core
-from jaeger.core.core import FPS, config, utils
-from jaeger.core.commands import CommandID
+from jaeger.core import config, utils
 from jaeger.core.interfaces import Message, VirtualBus
 from jaeger.core.maskbits import BootloaderStatus, PositionerStatus, ResponseCode
-from jaeger.core.positioner import Positioner
-from jaeger.core.target.tools import get_wok_data
+from jaeger.core.positioner.positioner import CommandID
 from jaeger.core.utils.helpers import StatusMixIn
 
 
-__all__ = ["VirtualFPS", "VirtualPositioner", "MockFPS"]
+__all__ = ["VirtualFPS", "VirtualPositioner"]
 
 
 TIME_STEP = config["positioner"]["time_step"]
@@ -51,6 +47,7 @@ class VirtualFPS(jaeger.core.FPS):
         asyncio.create_task(self.process_messages())
 
     def add_virtual_positioner(self, pid: int):
+        print(pid)
         self._vpositioners[pid] = VirtualPositioner(pid, bus=self._vpositioner_bus)
 
     def _check_fibre_assignments(self, *args, **kwargs):
@@ -399,91 +396,3 @@ class VirtualPositioner(StatusMixIn):
             self.status = self._initial_status
 
         self.firmware = ".".join(firmware_chunks)
-
-
-class MockFPS(FPS):
-    """A mock of the FPS class.
-
-    Implements some basic functionality of the FPS class for testing, mainly
-    meant for testing the `.Design`, `.Configuration`, and path generation
-    routines.
-
-    Parameters
-    ----------
-    observatory
-        The observatory for which to create the mock FPS.
-    positioner_data
-        A mapping of positioner ID to a dictionary of states, which can include
-        the ``alpha`` and ``beta`` positions, whether it is ``disabled`` or
-        ``offline``. The remaining positioners are assumed to be folded and enabled.
-    random
-        When ``True``, the positioners are placed randomly on the focal plane (always
-        with the beta arm in a safe configuration). Positioners with data provided
-        in ``positioner_data`` are still placed at the provided position.
-
-    """
-
-    def __init__(
-        self,
-        observatory: str,
-        positioner_data: Mapping[int, Mapping[str, float | bool]] = {},
-        random: bool = False,
-    ):
-        alpha0, beta0 = config["kaiju"]["lattice_position"]
-
-        self.observatory = observatory
-
-        self._positioner_data = positioner_data
-        self.wok_data = get_wok_data(observatory)
-
-        for positioner_id in self.wok_data["positionerID"]:
-            positioner = Positioner(positioner_id, self)
-
-            if random is False:
-                positioner.alpha = alpha0
-                positioner.beta = beta0
-            else:
-                positioner.alpha = float(numpy.random.uniform(0, 360))
-                positioner.beta = float(numpy.random.uniform(*SAFE_BETA))
-
-            if positioner_id in positioner_data:
-                data = positioner_data[positioner_id]
-                if "alpha" in data:
-                    positioner.alpha = data["alpha"]
-                if "beta" in data:
-                    positioner.beta = data["beta"]
-                if "disabled" in data:
-                    positioner.disabled = bool(data["disabled"])
-                if "offline" in data:
-                    positioner.offline = bool(data["offline"])
-
-            self[positioner_id] = positioner
-
-        self._locked = False
-
-    def rearrange(self, new_positions: Mapping[int, Mapping[str, float | bool]]):
-        """Reset the positioner to a new configuration."""
-
-        self.clear()
-        self.__init__(self.observatory, new_positions)
-
-    def randomise(self):
-        """Randomises all the positioners."""
-
-        for positioner in self.values():
-            positioner.alpha = float(numpy.random.uniform(0, 360))
-            positioner.beta = float(numpy.random.uniform(*SAFE_BETA))
-
-    def fold(self):
-        """Folds all the positioners."""
-
-        alpha0, beta0 = config["kaiju"]["lattice_position"]
-
-        for positioner in self.values():
-            positioner.alpha = alpha0
-            positioner.beta = beta0
-
-    async def update_position(self, *args, **kwargs) -> numpy.ndarray | bool:
-        """Override ``update_position`` to do nothing."""
-
-        return self.get_positions()

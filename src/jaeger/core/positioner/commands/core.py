@@ -18,11 +18,11 @@ import warnings
 
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from jaeger import can_log, config, log, maskbits
-from jaeger.exceptions import CommandError, JaegerError, JaegerUserWarning
-from jaeger.interfaces import BusABC, Message
-from jaeger.maskbits import CommandStatus, ResponseCode
-from jaeger.utils import StatusMixIn, get_identifier, parse_identifier
+from jaeger.core import can_log, config, log, maskbits
+from jaeger.core.exceptions import CommandError, JaegerError, JaegerUserWarning
+from jaeger.core.interfaces import BusABC, Message
+from jaeger.core.maskbits import CommandStatus, ResponseCode
+from jaeger.core.utils import StatusMixIn, get_identifier, parse_identifier
 
 from . import CommandID
 

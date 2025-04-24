@@ -20,12 +20,12 @@ from threading import Thread
 
 from typing import TYPE_CHECKING, Callable, Generic, Optional, Type, TypeVar
 
-from jaeger import log
+from jaeger.core import log
 
 
 if TYPE_CHECKING:
-    from jaeger.actor import JaegerActor
-    from jaeger.fps import FPS
+    from jaeger.core.actor import JaegerActor
+    from jaeger.core.fps import FPS
 
 
 __all__ = [
