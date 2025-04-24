@@ -120,7 +120,7 @@ help
 To move a positioner, use the `goto` command:
 
 ```bash
-goto 497 10.0 100.0goto 497 100 200
+goto 497 10.0 100.0
 1 0 >
 1 0 d text="Sending trajectory data."
 1 0 d text="Trajectory sent in 0.0 seconds."
