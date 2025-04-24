@@ -25,8 +25,7 @@ class Maskbit(enum.IntFlag):
     __version__ = None
 
     def __str__(self):
-        members, _ = enum._decompose(self.__class__, self._value_)  # type: ignore
-        return "|".join([str(m._name_ or m._value_) for m in members])
+        return "|".join([str(m._name_ or m._value_) for m in self])
 
     @property
     def version(self):
