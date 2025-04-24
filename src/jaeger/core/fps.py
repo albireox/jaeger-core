@@ -216,10 +216,6 @@ class FPS(BaseFPS):
 
         self.disabled: set[int] = set([])
 
-        if IPYTHON:
-            log.warning("IEB cannot run inside IPython.")
-            self.ieb = False
-
         self.__status_event = asyncio.Event()
 
         # Position and status pollers
@@ -242,7 +238,6 @@ class FPS(BaseFPS):
     async def create(
         cls,
         can=None,
-        ieb=None,
         initialise=True,
         start_pollers: bool | None = None,
         check_low_temperature: bool = True,
@@ -267,7 +262,7 @@ class FPS(BaseFPS):
         if cls in _FPS_INSTANCES:
             del _FPS_INSTANCES[cls]
 
-        instance = cls.get_instance(can=can, ieb=ieb)
+        instance = cls.get_instance(can=can)
         await instance.start_can()
 
         if initialise:
@@ -1109,7 +1104,6 @@ class FPS(BaseFPS):
         new_positions: dict[int, tuple[float, float]],
         speed: Optional[float] = None,
         relative=False,
-        use_sync_line: bool | None = None,
     ):
         """Sends a list of positioners to a given position.
 
@@ -1123,8 +1117,6 @@ class FPS(BaseFPS):
             The speed to use.
         relative
             If `True`, ``alpha`` and ``beta`` are considered relative angles.
-        use_sync_line
-            Whether to use the SYNC line to start the trajectories.
 
         """
 
@@ -1134,7 +1126,6 @@ class FPS(BaseFPS):
                 new_positions,
                 relative=relative,
                 speed=speed,
-                use_sync_line=use_sync_line,
             )
         except Exception:
             raise

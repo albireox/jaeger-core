@@ -230,8 +230,6 @@ async def goto(
     new_positions: dict[int, tuple[float, float]],
     speed: Optional[float] = None,
     relative: bool = False,
-    use_sync_line: bool | None = None,
-    force: bool = False,
     command: CluCommand[JaegerActor] | None = None,
 ):
     """Send positioners to a given position using a trajectory with ``kaiju`` check.
@@ -248,11 +246,6 @@ async def goto(
         The speed to use.
     relative
         If `True`, ``alpha`` and ``beta`` are considered relative angles.
-    use_sync_line
-        Whether to use the SYNC line to start the trajectories.
-    force
-        If ``go_cowboy=False`` and the trajectory is deadlocked, a `.TrajectoryError`
-        will be raised. Use ``force=True`` to apply the trajectory anyway.
     command
         A command to pass to `.send_trajectory` to output additional information.
 
@@ -306,9 +299,4 @@ async def goto(
             "beta": [(current_beta, 0.1), (beta_end, time_end[1] + 0.1)],
         }
 
-    return await send_trajectory(
-        fps,
-        trajectories,
-        use_sync_line=use_sync_line,
-        command=command,
-    )
+    return await send_trajectory(fps, trajectories, command=command)

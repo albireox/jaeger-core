@@ -29,7 +29,6 @@ from jaeger.core.exceptions import (
 )
 from jaeger.core.fps import FPS, LOCK_FILE
 from jaeger.core.positioner import Positioner
-from jaeger.core.positioner.commands.bootloader import load_firmware
 from jaeger.core.positioner.commands.calibration import calibrate_positioners
 from jaeger.core.positioner.commands.goto import goto as goto_
 from jaeger.core.testing import VirtualFPS
@@ -251,118 +250,6 @@ async def actor(fps_maker):
         await actor_.run_forever()
 
         await actor_.stop()
-
-
-@jaeger.command(name="upgrade-firmware")
-@click.argument(
-    "firmware-file",
-    nargs=1,
-    type=click.Path(exists=True),
-)
-@click.argument(
-    "SEXTANTS",
-    type=int,
-    nargs=-1,
-    required=False,
-)
-@click.option(
-    "-y",
-    "--yes",
-    is_flag=True,
-    help="Do not ask for confirmation.",
-)
-@click.option(
-    "-f",
-    "--force",
-    is_flag=True,
-    help="Forces skipping of invalid positioners",
-)
-@click.option(
-    "-p",
-    "--positioners",
-    type=str,
-    help="Comma-separated positioners to upgrade",
-)
-@click.option(
-    "-n",
-    "--no-cycle",
-    is_flag=True,
-    help="Does not power cycle positioners before upgrading each sextant",
-)
-@click.option(
-    "-o",
-    "--all-on",
-    is_flag=True,
-    help="Powers on all sextants after a successful upgrade.",
-)
-@pass_fps
-@cli_coro
-async def upgrade_firmware(
-    fps_maker,
-    firmware_file,
-    force,
-    positioners,
-    no_cycle,
-    sextants,
-    all_on,
-    yes,
-):
-    """Upgrades the firmaware."""
-
-    if positioners is not None:
-        positioners = [int(positioner.strip()) for positioner in positioners.split(",")]
-
-    fps_maker.initialise = False
-
-    sextants = sextants or (1, 2, 3, 4, 5, 6)
-
-    if not yes:
-        click.confirm(
-            f"Upgrade firmware for sextant(s) {', '.join(map(str, sextants))}?",
-            default=False,
-            abort=True,
-        )
-
-    async with fps_maker as fps:
-        ps_devs = []
-        if fps.ieb and no_cycle is False:
-            for module in fps.ieb.modules.values():
-                for dev_name in module.devices:
-                    if dev_name.upper().startswith("PS"):
-                        ps_devs.append(dev_name)
-
-        for sextant in sextants:
-            log.info(f"Upgrading firmware on sextant {sextant}.")
-
-            if fps.ieb and no_cycle is False:
-                log.info("Power cycling positioners")
-
-                for dev in ps_devs:
-                    await fps.ieb.get_device(dev).open()
-                    await asyncio.sleep(1)
-
-                await asyncio.sleep(5)
-
-                dev = "PS" + str(sextant)
-                await fps.ieb.get_device(dev).close()
-
-                await asyncio.sleep(3)
-
-            await fps.initialise(start_pollers=False)
-
-            await load_firmware(
-                fps,
-                firmware_file,
-                positioners=positioners,
-                force=force,
-                show_progressbar=True,
-            )
-
-    if all_on is True:
-        log.info("Powering on sextants.")
-        for sextant in sextants:
-            await fps.ieb.get_device(f"PS{sextant}").close()
-            await asyncio.sleep(3)
 
 
 @jaeger.command()

@@ -56,7 +56,6 @@ TrajectoryDataType = Dict[int, Dict[str, List[Tuple[float, float]]]]
 async def send_trajectory(
     fps: FPS,
     trajectories: str | pathlib.Path | TrajectoryDataType,
-    use_sync_line: bool | None = None,
     send_trajectory: bool = True,
     start_trajectory: bool = True,
     command: Optional[CluCommand[JaegerActor]] = None,
@@ -81,10 +80,6 @@ async def send_trajectory(
         dictionary containing two keys: ``alpha`` and ``beta``, each
         pointing to a list of tuples ``(position, time)``, where
         ``position`` is in degrees and ``time`` is in seconds.
-    use_sync_line
-        If `True`, the SYNC line will be used to synchronise the beginning of
-        all trajectories. Otherwise a `.START_TRAJECTORY` command will be sent
-        over the CAN network. If `None`, defaults to the configuration parameter.
     send_trajectory
         If `True`, sends the trajectory to the positioners and returns the
         `.Trajectory` instance.
@@ -130,11 +125,6 @@ async def send_trajectory(
         extra_dump_data=extra_dump_data,
     )
 
-    if use_sync_line is None:
-        use_sync_line = config["fps"]["use_sync_line"]
-
-    assert isinstance(use_sync_line, bool)
-
     if send_trajectory is False:
         return traj
 
@@ -174,7 +164,7 @@ async def send_trajectory(
         command.info(msg)
 
     try:
-        await traj.start(use_sync_line=use_sync_line)
+        await traj.start()
     except TrajectoryError as err:
         if traj.start_time is not None and traj.end_time is not None:
             elapsed = traj.end_time - traj.start_time
@@ -291,7 +281,6 @@ class Trajectory(object):
         self.start_time: float | None = None
         self.end_time: float | None = None
 
-        self.use_sync_line: bool = True
         self._ready_to_start = False
 
         self.dump_data = {
@@ -300,7 +289,6 @@ class Trajectory(object):
             "trajectory_send_time": None,
             "trajectory_start_time": None,
             "end_time": None,
-            "use_sync_line": True,
             "extra": extra_dump_data,
             "trajectory": self.trajectories,
             "initial_positions": self.fps.get_positions_dict(),
@@ -499,7 +487,7 @@ class Trajectory(object):
 
         return True
 
-    async def start(self, use_sync_line: bool = True):
+    async def start(self):
         """Starts the trajectory."""
 
         if not self._ready_to_start or self.failed:
@@ -507,8 +495,6 @@ class Trajectory(object):
 
         if self.move_time is None:
             raise TrajectoryError("move_time not set.", self)
-
-        self.use_sync_line = use_sync_line
 
         # Start trajectories
         n_expected = len([pos for pos in self.fps.values() if not pos.offline])
@@ -609,7 +595,6 @@ class Trajectory(object):
         self.dump_data["success"] = not self.failed
         self.dump_data["trajectory_start_time"] = self.start_time
         self.dump_data["trajectory_send_time"] = self.data_send_time
-        self.dump_data["use_sync_line"] = self.use_sync_line
         self.dump_data["end_time"] = time.time()
         self.dump_data["final_positions"] = self.fps.get_positions_dict()
 

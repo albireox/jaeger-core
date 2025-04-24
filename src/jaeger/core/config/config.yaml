@@ -38,7 +38,6 @@ fps:
   offline_positioners: null
   disable_collision_detection_positioners: []
   open_loop_positioners: []
-  use_sync_line: false
 
 positioner:
   reduction_ratio: 1024

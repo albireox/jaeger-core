@@ -36,7 +36,6 @@ class VirtualFPS(jaeger.core.FPS):
 
     def __post_init__(self):
         self.can = "virtual"
-        self.ieb = True
         self.observatory = "APO"
 
         super().__post_init__()
