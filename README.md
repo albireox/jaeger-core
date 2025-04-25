@@ -75,7 +75,7 @@ Position: alpha=10.007, beta=100.006
 The `jaeger-core` library can also be used as an actor. The actor is a TCP server that accepts commands and replies with data in a standard SDSS format (this may be changed in the future). To run the actor, from the command line, run:
 
 ```bash
-$ jaeger actor start --debug
+jaeger actor start --debug
 ```
 
 (or without `--debug` to run as a daemon in the background). Then open a TCP socket to localhost in port 19990. You can then send commands and receive responses. To get a list of available commands do
