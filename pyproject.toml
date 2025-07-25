@@ -12,7 +12,7 @@ dependencies = [
     "numpy>=1.25,<2; python_version<'3.11'",
     "numpy>=2.0,<3; python_version>='3.11'",
     "sdss-clu>=2.0.0",
-    "click>=8.0.0",
+    "click>=8.0.0,<8.2.0",
     "click_default_group>=1.2.2",
     "astropy>=7.0.1",
     "progressbar>=2.5",
