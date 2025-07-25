@@ -23,7 +23,7 @@ from clu.tools import ActorHandler
 
 import jaeger.core
 from jaeger.core import __version__, log
-from jaeger.core.exceptions import JaegerError, JaegerUserWarning
+from jaeger.core.exceptions import JaegerUserWarning
 
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ def merge_json(base: str, custom: str | None, write_temporary_file=False):
 class JaegerActor(clu.LegacyActor):
     """The jaeger SDSS-style actor."""
 
-    def __init__(self, fps: FPS, *args, observatory: str | None = None, **kwargs):
+    def __init__(self, fps: FPS, *args, **kwargs):
         jaeger.core.actor_instance = self
 
         self.fps = fps
@@ -77,15 +77,6 @@ class JaegerActor(clu.LegacyActor):
         # Pass the FPS instance as the second argument to each parser
         # command (the first argument is always the actor command).
         self.parser_args = [fps]
-
-        # Set the observatory where the actor is running.
-        if observatory is None:
-            try:
-                self.observatory = os.environ["OBSERVATORY"]
-            except KeyError:
-                raise JaegerError("Observatory not passed and $OBSERVATORY is not set.")
-        else:
-            self.observatory = observatory
 
         super().__init__(*args, **kwargs)
 

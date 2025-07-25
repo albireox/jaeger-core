@@ -212,8 +212,6 @@ class FPS(BaseFPS):
         self._locked = False
         self.locked_by: List[int] = []
 
-        self.observatory = config["observatory"]
-
         self.disabled: set[int] = set([])
 
         self.__status_event = asyncio.Event()
