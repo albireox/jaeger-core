@@ -58,7 +58,13 @@ def merge_json(base: str, custom: str | None, write_temporary_file=False):
 class JaegerActor(clu.LegacyActor):
     """The jaeger SDSS-style actor."""
 
-    def __init__(self, fps: FPS, *args, **kwargs):
+    def __init__(
+        self,
+        fps: FPS,
+        *args,
+        ping_interval: float | bool | None = None,
+        **kwargs,
+    ):
         jaeger.core.actor_instance = self
 
         self.fps = fps
@@ -92,7 +98,7 @@ class JaegerActor(clu.LegacyActor):
         if log.warnings_logger:
             log.warnings_logger.addHandler(self.actor_handler)
 
-        self._alive_task = asyncio.create_task(self._report_alive())
+        self._alive_task = asyncio.create_task(self._report_alive(ping_interval))
         self._status_watcher_task = asyncio.create_task(self._status_watcher())
 
     async def start(self, *args, **kwargs):
@@ -114,12 +120,18 @@ class JaegerActor(clu.LegacyActor):
 
         self.log.info(f"starting status server on {self.host}:{port}")
 
-    async def _report_alive(self):
+    async def _report_alive(self, ping_interval: float | bool | None = None):
         """Outputs the ``alive_at`` keyword."""
+
+        if ping_interval is False or ping_interval is None:
+            return
+
+        if ping_interval is True:
+            ping_interval = 60
 
         while True:
             self.write("d", {"alive_at": time()}, broadcast=True)
-            await asyncio.sleep(60)
+            await asyncio.sleep(ping_interval)
 
     async def _report_status_cb(self, transport):
         """Reports the status to the status server."""

@@ -8,6 +8,7 @@ actor:
     port: 19991
     delay: 5
   schema: config/schema.json
+  ping_interval: false
 
 profiles:
   default: cannet
